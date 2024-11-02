@@ -4,6 +4,11 @@
 
 html, body {
   margin: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
   background-color: #008000;
 }
 
@@ -60,6 +65,23 @@ html, body {
 
 .stone[data-state="2"] {
   background-color: white;
+}
+
+#pass {
+  font-size: 20px;
+  padding: 10px 20px;
+  border-radius: 5px;
+}
+
+#surrender {
+  font-size: 20px;
+  padding: 10px 20px;
+  border-radius: 5px;
+}
+
+p {
+  font-size: 24px;
+  color:yellow;
 }
 
 #square-template {

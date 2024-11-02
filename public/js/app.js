@@ -4,20 +4,25 @@ const stoneStateList = [];
 let currentColor = 1;
 const currentTurnText = document.getElementById("current-turn");
 const passButton = document.getElementById("pass");
+const surrenderButton = document.getElementById("surrender");
+let blackStonesNum = 0;
+let whiteStonesNum = 0;
+let winnerText;
 
 const changeTurn = () => {
   currentColor = 3 - currentColor;
   
   if (currentColor === 1) {
     currentTurnText.textContent = "黒";
+    updateTurnColor('黒');
   } else {
     currentTurnText.textContent = "白";
+    updateTurnColor('白');
   }
 }
 
 const getReversibleStones = (idx) => {
   //クリックしたマスから見て、各方向にマスがいくつあるかをあらかじめ計算する
-  //squareNumsの定義はやや複雑なので、理解せずコピーアンドペーストでも構いません
   const squareNums = [
     7 - (idx % 8),
     Math.min(7 - (idx % 8), (56 + (idx % 8) - idx) / 8),
@@ -95,19 +100,7 @@ const onClickSquare = (index) => {
 
   //もし盤面がいっぱいだったら、集計してゲームを終了する
   if (stoneStateList.every((state) => state !== 0)) {
-    const blackStonesNum = stoneStateList.filter(state => state === 1).length;
-    const whiteStonesNum = 64 - whiteStonesNum;
-
-    let winnerText = "";
-    if (blackStonesNum > whiteStonesNum) {
-      winnerText = "黒の勝ちです！";
-    } else if (blackStonesNum < whiteStonesNum) {
-      winnerText = "白の勝ちです！";
-    } else {
-      winnerText = "引き分けです";
-    }
-
-    alert(`ゲーム終了です。白${whiteStonesNum}、黒${blackStonesNum}で、${winnerText}`)
+    diclareWinner();
   }
 
   //ゲーム続行なら相手のターンにする
@@ -142,7 +135,60 @@ const createSquares = () => {
   }
 }
 
+const resetBoard = () => {
+  stoneStateList.fill(0); // 全ての石をリセット
+  document.querySelectorAll('.stone').forEach((stone, index) => {
+    let defaultState;
+    if (index === 27 || index === 36) {
+      defaultState = 1;
+    } else if (index === 28 || index === 35) {
+      defaultState = 2;
+    } else {
+      defaultState = 0;
+    }
+    stone.setAttribute("data-state", defaultState);
+    stoneStateList[index] = defaultState;
+  });
+
+  currentColor = 1;
+  currentTurnText.textContent = '黒';
+  blackStonesNum = 0;
+  whiteStonesNum = 0;
+  winnerText = "";
+  updateTurnColor('黒');
+};
+
+const diclareWinner = () => {
+  blackStonesNum = stoneStateList.filter(state => state === 1).length;
+  whiteStonesNum = 64 - whiteStonesNum;
+
+  if (blackStonesNum > whiteStonesNum) {
+    winnerText = "黒の勝ちです！";
+  } else if (blackStonesNum < whiteStonesNum) {
+    winnerText = "白の勝ちです！";
+  } else {
+    winnerText = "引き分けです";
+  }
+  endGame();
+}
+
+const endGame = () => {
+  alert(`ゲーム終了です。白${whiteStonesNum}、黒${blackStonesNum}で、${winnerText}`)
+  resetBoard();
+}
+
+const surrender = () => {
+  if(currentTurnText.textContent === '黒'){
+    winnerText = "白の勝ちです！"
+  } else {
+    winnerText = "黒の勝ちです！"
+  }
+  alert(currentTurnText.textContent + 'の降参により' + winnerText);
+  resetBoard();
+}
+
 window.onload = () => {
   createSquares();
-  passButton.addEventListener("click", changeTurn)
+  passButton.addEventListener("click", changeTurn);
+  surrenderButton.addEventListener("click", surrender);
 }

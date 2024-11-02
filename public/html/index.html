@@ -16,8 +16,25 @@
   <div id="square-template" class="square">
     <div class="stone"></div>
   </div>
-  <!-- パスボタン -->
-  <button id="pass">パスする</button>
+  <div id="button" class="button">
+    <!-- パスボタン -->
+    <button id="pass">パスする</button>
+    <!-- 降参ボタン -->
+     <button id="surrender">降参する</button>
+  </div>
   <script src="../js/app.js"></script>
+  <script> // JavaScript to dynamically change the color based on current turn 
+    function updateTurnColor(turn) { 
+      console.log("updateTurnColorが呼び出されました");
+      const turnElement = document.getElementById('current-turn'); 
+      if (turn === '黒') { 
+        turnElement.style.color = 'black'; 
+      } else { 
+        turnElement.style.color = 'white'; 
+      } 
+    }
+    const currentTurn = document.getElementById('current-turn').textContent;
+    updateTurnColor(currentTurn);
+  </script>
 </body>
 </html>
