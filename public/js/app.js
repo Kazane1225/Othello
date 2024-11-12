@@ -181,7 +181,7 @@ const evaluateBoard = (board, player) => {
 
   // 周囲の石の数をカウントして評価に加える
   for (let i = 0; i < board.length; i++) {
-    if (board[i] === plaeyr) {
+    if (board[i] === player) {
       score += countSurroundingStones(board, i) * 50; // 周囲の石の数に応じたボーナスを追加
     }
   }
