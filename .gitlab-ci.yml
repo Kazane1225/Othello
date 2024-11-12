@@ -4,9 +4,10 @@ pages:
   stage: deploy
   script:
     - '[ -d public ] || mkdir public'
-    - cp -r * public
+    - apk add --no-cache rsync
+    - rsync -av --exclude='public' . public/
   artifacts:
     paths:
       - public
   only:
-    - master
+    - main 
