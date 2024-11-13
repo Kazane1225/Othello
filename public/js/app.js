@@ -8,6 +8,7 @@ const surrenderButton = document.getElementById("surrender");
 let blackStonesNum = 0;
 let whiteStonesNum = 0;
 let winnerText;
+let isPlayerTurn = true;
 
 const scoreMatrix = [
   1000000000, -500000000000, -500, 5000, 5000, -500, -500000000000, 1000000000,
@@ -22,33 +23,16 @@ const scoreMatrix = [
 
 const changeTurn = () => {
   currentColor = 3 - currentColor;
-
+  isPlayerTurn = false;
   if (currentColor === 1) {
     currentTurnText.textContent = "黒";
     updateTurnColor('黒');
+    isPlayerTurn = true;
   } else {
     currentTurnText.textContent = "白";
     updateTurnColor('白');
-    // AIのターン(白)に移るときにAIの動作を実行
-    setTimeout(() => {
-      const legalMoves = getLegalMoves(stoneStateList, currentColor);
-      console.log("AIの合法手:", legalMoves);  // AIが打てる手をデバッグ用に表示する
-      if (legalMoves.length > 0) {
-        const bestMove = findBestMove(stoneStateList, currentColor);
-        if (bestMove) {
-          onClickSquare(bestMove.row * 8 + bestMove.col);
-        }
-      } else {
-        if (getLegalMoves(stoneStateList, 3 - currentColor).length === 0) {
-          alert("ゲーム終了");
-          declareWinner();
-        } else {
-          // AIがパスする場合
-          alert("AIはパスします");
-          changeTurn();
-        }
-      }
-    }, 500); // 0.5秒待ってからAIの手を打つ
+    isPlayerTurn = false;
+    aiMove();
   }
 };
 
@@ -85,9 +69,11 @@ const findBestMove = (board, player) => {
   const legalMoves = getLegalMoves(board, player);
   const corners = [0, 7, 56, 63]; // 各角のインデックス
 
+  console.log("findBestMove - legalMoves:", legalMoves);
+
   // 盤面の空き数に応じて探索深度を調整
   const remainingEmpty = stoneStateList.filter(stone => stone === 0).length;
-  let depth = remainingEmpty > 15 ? 6 : 8;
+  let depth = remainingEmpty > 15 ? 6 : 6;
 
   for (let move of legalMoves) {
     const newBoard = makeMove([...board], player, move.row, move.col);
@@ -106,15 +92,16 @@ const findBestMove = (board, player) => {
 
     // 相手が角を取れる可能性がある手を防ぐためにボーナスを追加
     if (wouldOpponentTakeCorner(newBoard, move, player)) {
-      moveValue += 80000; // 相手の角取りを阻止する手に高評価を追加
+      moveValue += 8000000000000; // 相手の角取りを阻止する手に高評価を追加
     }
 
-    if (moveValue > bestValue) {
+    if (moveValue > bestValue || bestMove === null) {
       bestValue = moveValue;
       bestMove = move;
     }
   }
 
+  console.log("Best move found:", bestMove);
   return bestMove;
 };
 
@@ -311,33 +298,66 @@ const getReversibleStones = (idx, player = currentColor) => {
   return results;
 };
 
-const onClickSquare = (index) => {
-  const reversibleStones = getReversibleStones(index);
-  console.log("onClickSquare: reversibleStones", reversibleStones); // デバッグ用
+const aiMove = () => {
+  setTimeout(() => {
+    const legalMoves = getLegalMoves(stoneStateList, currentColor);
+    console.log("AIの合法手:", legalMoves);
 
-  if (stoneStateList[index] !== 0 || !reversibleStones.length) {
-    alert("ここには置けないよ！");
-    return;
-  }
+    if (legalMoves.length > 0) {
+      const bestMove = findBestMove(stoneStateList, currentColor);
+      if (bestMove) {
+        console.log("AI moves to:", bestMove);
+        makeMoveAndUpdateDisplay(bestMove.row * 8 + bestMove.col);  // AIの手を置く
+      } else {
+        console.log("No valid move found by findBestMove");
+      }
+    } else {
+      if (getLegalMoves(stoneStateList, 3 - currentColor).length === 0) {
+        alert("ゲーム終了");
+        declareWinner();
+        isPlayerTurn = true;
+      } else {
+        // AIがパスする場合
+        alert("AIはパスします");
+        changeTurn();
+      }
+    }
+  }, 500);
+};
+
+// 駒を配置し表示を更新する関数
+const makeMoveAndUpdateDisplay = (index) => {
+  const reversibleStones = getReversibleStones(index);
+  console.log("makeMoveAndUpdateDisplay: reversibleStones", reversibleStones);
 
   stoneStateList[index] = currentColor;
-  document
-    .querySelector(`[data-index='${index}']`)
-    .setAttribute("data-state", currentColor);
+  document.querySelector(`[data-index='${index}']`).setAttribute("data-state", currentColor);
 
   reversibleStones.forEach((key) => {
     stoneStateList[key] = currentColor;
     document.querySelector(`[data-index='${key}']`).setAttribute("data-state", currentColor);
   });
-
-  console.log("石を置いた後の盤面:", stoneStateList);  // デバッグ用に盤面の状態を表示
+  console.log("石を置いた後の盤面:", stoneStateList);
 
   if (stoneStateList.every((state) => state !== 0)) {
     declareWinner();
+  } else {
+    changeTurn(); // 次のターンに移る
+  }
+};
+
+const onClickSquare = (index) => {
+  console.log("onClickSquare called with index:", index);
+  if (!isPlayerTurn) {
+    alert("AIのターン中は操作できません！");
     return;
   }
-
-  changeTurn();
+  const reversibleStones = getReversibleStones(index);
+  if (stoneStateList[index] !== 0 || !reversibleStones.length) {
+    alert("ここには置けないよ！");
+    return;
+  }
+  makeMoveAndUpdateDisplay(index);
 };
 
 const createSquares = () => {
@@ -382,6 +402,7 @@ const resetBoard = () => {
   });
   currentColor = 1;
   currentTurnText.textContent = '黒';
+  isPlayerTurn = true;
   updateTurnColor('黒');
 };
 
