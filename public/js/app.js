@@ -73,7 +73,7 @@ const findBestMove = (board, player) => {
 
   // 盤面の空き数に応じて探索深度を調整
   const remainingEmpty = stoneStateList.filter(stone => stone === 0).length;
-  let depth = remainingEmpty > 15 ? 6 : 6;
+  let depth = remainingEmpty > 15 ? 8 : 6;
 
   let safeMoves = []; // 安全な手のリスト
 
