@@ -95,6 +95,11 @@ const findBestMove = (board, player) => {
       moveValue += 8000000000000; // 相手の角取りを阻止する手に高評価を追加
     }
 
+    // プレイヤーが角を取れるかどうかを評価
+    if (playerCanTakeCorner(newBoard, 3 - player)) {
+      moveValue -= 50000000000000; // プレイヤーが角を取れる場合、ペナルティを課す
+    }
+
     if (moveValue > bestValue || bestMove === null) {
       bestValue = moveValue;
       bestMove = move;
@@ -103,6 +108,27 @@ const findBestMove = (board, player) => {
 
   console.log("Best move found:", bestMove);
   return bestMove;
+};
+
+const playerCanTakeCorner = (board, player) => {
+  const opponent = 3 - player; // プレイヤーの対戦相手
+  const corners = [0, 7, 56, 63]; // 各角のインデックス
+
+  // 各角に対してチェック
+  for (let corner of corners) {
+      if (board[corner] !== 0) continue; // 角に既に石がある場合はスキップ
+
+      // 角の周囲にあるマスをチェックして、相手の石で埋め尽くされている場合
+      const linesToCorner = getLinesToCorner(corner); // 角への各ラインを取得
+      for (let line of linesToCorner) {
+          if (isPotentialCornerTakeover(board, line, opponent)) {
+              console.log("次角を取られる可能性があります。");
+              return true; // プレイヤーが次の手で角を取れる可能性がある場合
+          }
+      }
+  }
+  console.log("安全な手です");
+  return false; // 角が取れない場合
 };
 
 const wouldOpponentTakeCorner = (board, move, player) => {
@@ -213,14 +239,62 @@ const isFrontier = (board, index) => {
 
 const isPotentialCornerTakeover = (board, line, opponent) => {
   let hasOpponentStones = false;
+  let canTakeCorner = false;
+
   for (let i = 0; i < line.length; i++) {
     if (board[line[i]] === opponent) {
+      // 相手の石がある場合、相手の石が連続しているかをチェック
       hasOpponentStones = true;
     } else if (board[line[i]] === 0) {
-      return false;
+      // 空のマスが見つかった場合、もしその前に相手の石があり、その後に自分の石で挟めるなら角取りの可能性がある
+      if (hasOpponentStones) {
+        // 挟めるかどうかを判断するには、次に自分の石を置いたと仮定して確認する
+        const potentialBoard = [...board];
+        potentialBoard[line[i]] = opponent; // 仮に相手が次に置くとした場合
+        if (canTakeWithMove(potentialBoard, line[i], opponent)) {
+          canTakeCorner = true;
+        }
+      }
+      break; // 空のマスがあった場合はそのラインでこれ以上進む必要がない
+    } else {
+      // 自分の石が見つかった場合、相手の石が存在するなら挟める
+      if (hasOpponentStones) {
+        return true; // 相手の石があり、その後に自分の石があるなら挟める
+      } else {
+        return false; // 相手の石がない場合は挟めない
+      }
     }
   }
-  return hasOpponentStones;
+
+  return canTakeCorner;
+};
+
+// 指定の位置に石を置いた場合に角を取れるかどうかをチェックする補助関数
+const canTakeWithMove = (board, index, player) => {
+  // 8方向の全てについてリバーシが可能か確認
+  const directions = [-1, 1, -8, 8, -9, 9, -7, 7];
+  for (let direction of directions) {
+    let currentIdx = index + direction;
+    let hasOpponentStone = false;
+
+    // 指定した方向に沿ってリバーシが可能かどうか
+    while (currentIdx >= 0 && currentIdx < 64) {
+      if (board[currentIdx] === 3 - player) {
+        hasOpponentStone = true; // 相手の石が存在する
+      } else if (board[currentIdx] === player) {
+        if (hasOpponentStone) {
+          return true; // 挟める場合
+        } else {
+          break; // 相手の石がない場合は挟めない
+        }
+      } else {
+        break; // 空マスの場合
+      }
+
+      currentIdx += direction;
+    }
+  }
+  return false;
 };
 
 const getBlockingMoves = (board, line, player) => {
@@ -402,7 +476,6 @@ const resetBoard = () => {
   });
   currentColor = 1;
   currentTurnText.textContent = '黒';
-  isPlayerTurn = true;
   updateTurnColor('黒');
 };
 
