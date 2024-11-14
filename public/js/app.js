@@ -87,7 +87,7 @@ const findBestMove = (board, player) => {
     if (corners.includes(moveIndex)) {
       return move; // 角が置けるなら即座にその手を選択
     }
-    
+
     // プレイヤーが次に角を取る可能性があるかどうかを評価
     if (!playerCanTakeCorner(newBoard, 3 - player)) {
       safeMoves.push(move);
@@ -122,6 +122,24 @@ const findBestMove = (board, player) => {
   return bestMove;
 };
 
+const playerCanTakeCorner = (board, player) => {
+  const corners = [0, 7, 56, 63]; // 各角のインデックス
+
+  // 各角に対してチェック
+  for (let corner of corners) {
+    if (board[corner] !== 0) continue; // 角に既に石がある場合はスキップ
+
+    // 角の周囲にあるマスをチェックして、相手の石で埋め尽くされているかどうかを確認
+    const linesToCorner = getLinesToCorner(corner); // 角への各ラインを取得
+    for (let line of linesToCorner) {
+      if (isPotentialCornerTakeover(board, line, player)) {
+        console.log(`次の手で相手が角を取る可能性があります: corner index ${corner}`);
+        return true; // プレイヤーが次の手で角を取れる可能性がある場合
+      }
+    }
+  }
+  return false; // 角が取れない場合
+};
 
 const wouldOpponentTakeCorner = (board, move, player) => {
   const opponent = 3 - player;
