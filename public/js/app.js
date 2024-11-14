@@ -97,7 +97,7 @@ const findBestMove = (board, player) => {
 
     // プレイヤーが角を取れるかどうかを評価
     if (playerCanTakeCorner(newBoard, 3 - player)) {
-      moveValue -= 50000000000000; // プレイヤーが角を取れる場合、ペナルティを課す
+      moveValue -= 500000000000000000; // プレイヤーが角を取れる場合、ペナルティを課す
     }
 
     if (moveValue > bestValue || bestMove === null) {
@@ -306,9 +306,6 @@ const getBlockingMoves = (board, line, player) => {
         blockingMoves.push({ row: Math.floor(line[i] / 8), col: line[i] % 8 });
       }
     }
-  }
-  if(blockingMoves.length > 0){
-    console.log("Blocking moves identified:", blockingMoves); // デバッグ用出力
   }
   return blockingMoves;
 };
