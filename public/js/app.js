@@ -75,7 +75,29 @@ const findBestMove = (board, player) => {
   const remainingEmpty = stoneStateList.filter(stone => stone === 0).length;
   let depth = remainingEmpty > 15 ? 6 : 6;
 
+  let safeMoves = []; // 安全な手のリスト
+
+  // すべての合法手をチェックして安全な手のみをリストに追加
   for (let move of legalMoves) {
+    const newBoard = makeMove([...board], player, move.row, move.col);
+
+    const moveIndex = move.row * 8 + move.col;
+
+    // 角に直接置ける場合にボーナスを追加
+    if (corners.includes(moveIndex)) {
+      return move; // 角が置けるなら即座にその手を選択
+    }
+    
+    // プレイヤーが次に角を取る可能性があるかどうかを評価
+    if (!playerCanTakeCorner(newBoard, 3 - player)) {
+      safeMoves.push(move);
+    }
+  }
+
+  // 安全な手が存在する場合、そこからベストムーブを探す
+  const movesToConsider = safeMoves.length > 0 ? safeMoves : legalMoves;
+
+  for (let move of movesToConsider) {
     const newBoard = makeMove([...board], player, move.row, move.col);
     let moveValue = minimax(newBoard, depth - 1, false, 3 - player);
 
@@ -90,16 +112,6 @@ const findBestMove = (board, player) => {
       moveValue -= 1000000; // C-squareに配置しないために大きなペナルティを課す
     }
 
-    // 相手が角を取れる可能性がある手を防ぐためにボーナスを追加
-    if (wouldOpponentTakeCorner(newBoard, move, player)) {
-      moveValue += 8000000000000; // 相手の角取りを阻止する手に高評価を追加
-    }
-
-    // プレイヤーが角を取れるかどうかを評価
-    if (playerCanTakeCorner(newBoard, 3 - player)) {
-      moveValue -= 50000000000000; // プレイヤーが角を取れる場合、ペナルティを課す
-    }
-
     if (moveValue > bestValue || bestMove === null) {
       bestValue = moveValue;
       bestMove = move;
@@ -110,26 +122,6 @@ const findBestMove = (board, player) => {
   return bestMove;
 };
 
-const playerCanTakeCorner = (board, player) => {
-  const opponent = 3 - player; // プレイヤーの対戦相手
-  const corners = [0, 7, 56, 63]; // 各角のインデックス
-
-  // 各角に対してチェック
-  for (let corner of corners) {
-      if (board[corner] !== 0) continue; // 角に既に石がある場合はスキップ
-
-      // 角の周囲にあるマスをチェックして、相手の石で埋め尽くされている場合
-      const linesToCorner = getLinesToCorner(corner); // 角への各ラインを取得
-      for (let line of linesToCorner) {
-          if (isPotentialCornerTakeover(board, line, opponent)) {
-              console.log("次角を取られる可能性があります。");
-              return true; // プレイヤーが次の手で角を取れる可能性がある場合
-          }
-      }
-  }
-  console.log("安全な手です");
-  return false; // 角が取れない場合
-};
 
 const wouldOpponentTakeCorner = (board, move, player) => {
   const opponent = 3 - player;
