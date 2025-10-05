@@ -1,3 +1,5 @@
+// === Othello / Reversi 強化AI（フル置き換え版） ===================================
+
 const stage = document.getElementById("stage");
 const squareTemplate = document.getElementById("square-template");
 const stoneStateList = [];
@@ -10,6 +12,7 @@ let whiteStonesNum = 0;
 let winnerText;
 let isPlayerTurn = true;
 
+// 位置評価行列（元コードを尊重してそのまま使用）
 const scoreMatrix = [
   1000000000, -500000000000, -500, 5000, 5000, -500, -500000000000, 1000000000,
   -500000000000, -500000000000, -200, -200, -200, -200, -5000000000, -500000000000,
@@ -21,6 +24,12 @@ const scoreMatrix = [
   1000000000, -500000000000, -500, 5000, 5000, -500, -500000000000, 1000000000
 ];
 
+const corners = [0, 7, 56, 63];
+const cSquares = [1, 6, 8, 9, 14, 15, 48, 49, 55, 57, 62];
+
+// ------------------------------------------------------------
+// ターン制御
+// ------------------------------------------------------------
 const changeTurn = () => {
   currentColor = 3 - currentColor;
   isPlayerTurn = false;
@@ -36,81 +45,105 @@ const changeTurn = () => {
   }
 };
 
+// ------------------------------------------------------------
+/** その盤面で player が置ける合法手を返す */
 const getLegalMoves = (board, player) => {
-  let legalMoves = [];
+  const legalMoves = [];
   for (let i = 0; i < board.length; i++) {
-    if (board[i] === 0 && getReversibleStones(i, player).length > 0) {
+    if (board[i] === 0 && getReversibleStones(board, i, player).length > 0) {
       legalMoves.push({ row: Math.floor(i / 8), col: i % 8 });
     }
   }
   return legalMoves;
 };
 
-const minimax = (board, depth, maximizingPlayer, player) => {
+// ------------------------------------------------------------
+// α–β枝刈り付き minimax
+// ------------------------------------------------------------
+const minimax = (board, depth, alpha, beta, maximizingPlayer, player) => {
   if (depth === 0 || isGameOver(board)) {
     return evaluateBoard(board, player);
   }
 
-  const opponent = 3 - player;
-  let bestEval = maximizingPlayer ? -Infinity : Infinity;
   const legalMoves = getLegalMoves(board, player);
 
-  for (let move of legalMoves) {
-    const newBoard = makeMove([...board], player, move.row, move.col);
-    const eval = minimax(newBoard, depth - 1, !maximizingPlayer, opponent);
-    bestEval = maximizingPlayer ? Math.max(bestEval, eval) : Math.min(bestEval, eval);
+  // パス処理：合法手がない場合は相手ターンに移動
+  if (legalMoves.length === 0) {
+    // 相手も打てなければ終了
+    if (getLegalMoves(board, 3 - player).length === 0) {
+      return evaluateBoard(board, player);
+    }
+    return minimax(board, depth - 1, alpha, beta, !maximizingPlayer, 3 - player);
   }
-  return bestEval;
+
+  if (maximizingPlayer) {
+    let bestEval = -Infinity;
+    for (const move of legalMoves) {
+      const newBoard = makeMove([...board], player, move.row, move.col);
+      const val = minimax(newBoard, depth - 1, alpha, beta, false, 3 - player);
+      bestEval = Math.max(bestEval, val);
+      alpha = Math.max(alpha, val);
+      if (beta <= alpha) break; // 枝刈り
+    }
+    return bestEval;
+  } else {
+    let bestEval = Infinity;
+    for (const move of legalMoves) {
+      const newBoard = makeMove([...board], player, move.row, move.col);
+      const val = minimax(newBoard, depth - 1, alpha, beta, true, 3 - player);
+      bestEval = Math.min(bestEval, val);
+      beta = Math.min(beta, val);
+      if (beta <= alpha) break; // 枝刈り
+    }
+    return bestEval;
+  }
 };
 
+// ------------------------------------------------------------
+// ベストムーブ探索（角優先・危険回避＋αβ使用・動的深度）
+// ------------------------------------------------------------
 const findBestMove = (board, player) => {
   let bestMove = null;
   let bestValue = -Infinity;
+
   const legalMoves = getLegalMoves(board, player);
-  const corners = [0, 7, 56, 63]; // 各角のインデックス
+  if (legalMoves.length === 0) return null;
 
-  console.log("findBestMove - legalMoves:", legalMoves);
+  // 空き数で深さを動的調整（終盤ほど深く読む）
+  const remainingEmpty = board.filter(v => v === 0).length;
+  let depth;
+  if (remainingEmpty > 20) depth = 5;
+  else if (remainingEmpty > 10) depth = 7;
+  else depth = 9;
 
-  // 盤面の空き数に応じて探索深度を調整
-  const remainingEmpty = stoneStateList.filter(stone => stone === 0).length;
-  let depth = remainingEmpty > 15 ? 8 : 6;
-
-  let safeMoves = []; // 安全な手のリスト
-
-  // すべての合法手をチェックして安全な手のみをリストに追加
-  for (let move of legalMoves) {
-    const newBoard = makeMove([...board], player, move.row, move.col);
-
-    const moveIndex = move.row * 8 + move.col;
-
-    // 角に直接置ける場合にボーナスを追加
-    if (corners.includes(moveIndex)) {
-      return move; // 角が置けるなら即座にその手を選択
-    }
-
-    // プレイヤーが次に角を取る可能性があるかどうかを評価
-    if (!playerCanTakeCorner(newBoard, 3 - player)) {
-      safeMoves.push(move);
+  // 角が打てるなら即採用
+  for (const m of legalMoves) {
+    const idx = m.row * 8 + m.col;
+    if (corners.includes(idx)) {
+      return m;
     }
   }
 
-  // 安全な手が存在する場合、そこからベストムーブを探す
+  // 相手に角を渡す危険手を排除（セーフムーブ抽出）
+  const safeMoves = [];
+  for (const move of legalMoves) {
+    if (!wouldOpponentTakeCorner(board, move, player)) {
+      safeMoves.push(move);
+    }
+  }
   const movesToConsider = safeMoves.length > 0 ? safeMoves : legalMoves;
 
-  for (let move of movesToConsider) {
+  for (const move of movesToConsider) {
     const newBoard = makeMove([...board], player, move.row, move.col);
-    let moveValue = minimax(newBoard, depth - 1, false, 3 - player);
 
+    // Cマス（角の隣の危険マス）への強ペナルティ
     const moveIndex = move.row * 8 + move.col;
-
-    // 角に直接置ける場合にボーナスを追加
-    if (corners.includes(moveIndex)) {
-      return move; // 角が置けるなら即座にその手を選択
+    let immediatePenalty = 0;
+    if (cSquares.includes(moveIndex)) {
+      immediatePenalty -= 1_000_000;
     }
 
-    if (scoreMatrix[moveIndex] < -1000) {
-      moveValue -= 1000000; // C-squareに配置しないために大きなペナルティを課す
-    }
+    const moveValue = minimax(newBoard, depth - 1, -Infinity, Infinity, false, 3 - player) + immediatePenalty;
 
     if (moveValue > bestValue || bestMove === null) {
       bestValue = moveValue;
@@ -118,101 +151,87 @@ const findBestMove = (board, player) => {
     }
   }
 
-  console.log("Best move found:", bestMove);
   return bestMove;
 };
 
-const playerCanTakeCorner = (board, player) => {
-  const corners = [0, 7, 56, 63]; // 各角のインデックス
-
-  // 各角に対してチェック
-  for (let corner of corners) {
-    if (board[corner] !== 0) continue; // 角に既に石がある場合はスキップ
-
-    // 角の周囲にあるマスをチェックして、相手の石で埋め尽くされているかどうかを確認
-    const linesToCorner = getLinesToCorner(corner); // 角への各ラインを取得
-    for (let line of linesToCorner) {
-      if (isPotentialCornerTakeover(board, line, player)) {
-        console.log(`次の手で相手が角を取る可能性があります: corner index ${corner}`);
-        return true; // プレイヤーが次の手で角を取れる可能性がある場合
-      }
-    }
-  }
-  return false; // 角が取れない場合
-};
-
+// 相手が次手で角やCに到達できるかの簡易チェック
 const wouldOpponentTakeCorner = (board, move, player) => {
   const opponent = 3 - player;
   const newBoard = makeMove([...board], player, move.row, move.col);
   const opponentMoves = getLegalMoves(newBoard, opponent);
-  const corners = [0, 7, 56, 63];
-  const cSquares = [1, 6, 8, 9, 14, 15, 48, 49, 55, 57, 62];
-
-  for (let oppMove of opponentMoves) {
-    const moveIndex = oppMove.row * 8 + oppMove.col;
-    if (corners.includes(moveIndex)) {
-      return true;
-    }
-    if (cSquares.includes(moveIndex)) {
-      return true;
-    }
+  for (const oppMove of opponentMoves) {
+    const idx = oppMove.row * 8 + oppMove.col;
+    if (corners.includes(idx)) return true;
+    if (cSquares.includes(idx)) return true;
   }
   return false;
 };
 
+// ------------------------------------------------------------
+// 評価関数（位置＋モビリティ＋安定石＋終盤駒差）
+// ------------------------------------------------------------
 const evaluateBoard = (board, player) => {
-  let score = 0;
   const opponent = 3 - player;
-  const corners = [0, 7, 56, 63];
-  const cSquares = [1, 6, 8, 9, 14, 15, 48, 49, 55, 57, 62];
+  let score = 0;
 
-  for (let i = 0; i < board.length; i++) {
-    if (board[i] === player) {
-      score += scoreMatrix[i];
-    } else if (board[i] === opponent) {
-      score -= scoreMatrix[i];
-    }
+  // 位置スコア
+  for (let i = 0; i < 64; i++) {
+    if (board[i] === player) score += scoreMatrix[i];
+    else if (board[i] === opponent) score -= scoreMatrix[i];
   }
 
-  for (let corner of corners) {
-    if (board[corner] === 0) {
-      const lines = getLinesToCorner(corner);
-      for (let line of lines) {
-        if (isPotentialCornerTakeover(board, line, opponent)) {
-          const movesToBlock = getBlockingMoves(board, line, player);
-          for (let move of movesToBlock) {
-            score += 100000;
-          }
-        }
-      }
-    }
+  // モビリティ（合法手の多さ）
+  const myMoves = getLegalMoves(board, player).length;
+  const oppMoves = getLegalMoves(board, opponent).length;
+  if (myMoves + oppMoves !== 0) {
+    score += 100 * (myMoves - oppMoves);
   }
 
-  for (let cSquare of cSquares) {
-    if (board[cSquare] === player) {
-      score -= 1000;
-    } else if (board[cSquare] === opponent) {
-      score += 1000;
-    }
+  // 安定石（ここでは角のみ確定とみなす簡易版）
+  const myStable = countStableStones(board, player);
+  const oppStable = countStableStones(board, opponent);
+  score += (myStable - oppStable) * 300;
+
+  // Cマス（角の隣）ペナルティ / ボーナス
+  for (const c of cSquares) {
+    if (board[c] === player) score -= 1000;
+    else if (board[c] === opponent) score += 1000;
   }
 
-  for (let i = 0; i < board.length; i++) {
+  // フロンティア石（空きに接する自石はやや減点）
+  for (let i = 0; i < 64; i++) {
     if (board[i] === player && isFrontier(board, i)) {
       score -= 100;
     }
   }
 
-  // 周囲の石の数をカウントして評価に加える
-  for (let i = 0; i < board.length; i++) {
-    if (board[i] === player) {
-      score += countSurroundingStones(board, i) * 50; // 周囲の石の数に応じたボーナスを追加
-    }
+  // 終盤は駒差を重視
+  const empty = board.filter(v => v === 0).length;
+  if (empty < 10) {
+    const myPieces = countPieces(board, player);
+    const oppPieces = countPieces(board, opponent);
+    score += (myPieces - oppPieces) * 200;
   }
 
   return score;
 };
 
-// 周囲の石の数を数える関数
+const countStableStones = (board, player) => {
+  // 簡易版：角を取っている分だけ
+  let stable = 0;
+  for (const c of corners) {
+    if (board[c] === player) stable++;
+  }
+  return stable;
+};
+
+const countPieces = (board, player) => board.filter(v => v === player).length;
+
+// ------------------------------------------------------------
+// 角関連の補助（元コードを活かしたまま使用）
+// ------------------------------------------------------------
+
+// 周囲の石の数を数える関数（評価内で使用）
 const countSurroundingStones = (board, index) => {
   const directions = [-1, 1, -8, 8, -9, 9, -7, 7]; // 8方向
   let count = 0;
@@ -237,14 +256,14 @@ const getLinesToCorner = (corner) => {
 };
 
 const isFrontier = (board, index) => {
-  const directions = [-1, 1, -8, 8, -9, 9, -7, 7]; // 8方向への移動
+  const directions = [-1, 1, -8, 8, -9, 9, -7, 7];
   for (let direction of directions) {
     const neighbor = index + direction;
     if (neighbor >= 0 && neighbor < 64 && board[neighbor] === 0) {
-      return true; // 周囲に空のマスがある場合はフロンティア
+      return true;
     }
   }
-  return false; // 周囲に空のマスがない場合はフロンティアでない
+  return false;
 };
 
 const isPotentialCornerTakeover = (board, line, opponent) => {
@@ -253,54 +272,42 @@ const isPotentialCornerTakeover = (board, line, opponent) => {
 
   for (let i = 0; i < line.length; i++) {
     if (board[line[i]] === opponent) {
-      // 相手の石がある場合、相手の石が連続しているかをチェック
       hasOpponentStones = true;
     } else if (board[line[i]] === 0) {
-      // 空のマスが見つかった場合、もしその前に相手の石があり、その後に自分の石で挟めるなら角取りの可能性がある
       if (hasOpponentStones) {
-        // 挟めるかどうかを判断するには、次に自分の石を置いたと仮定して確認する
         const potentialBoard = [...board];
-        potentialBoard[line[i]] = opponent; // 仮に相手が次に置くとした場合
+        potentialBoard[line[i]] = opponent; // 仮に相手が次に置く
         if (canTakeWithMove(potentialBoard, line[i], opponent)) {
           canTakeCorner = true;
         }
       }
-      break; // 空のマスがあった場合はそのラインでこれ以上進む必要がない
+      break;
     } else {
-      // 自分の石が見つかった場合、相手の石が存在するなら挟める
       if (hasOpponentStones) {
-        return true; // 相手の石があり、その後に自分の石があるなら挟める
+        return true;
       } else {
-        return false; // 相手の石がない場合は挟めない
+        return false;
       }
     }
   }
-
   return canTakeCorner;
 };
 
 // 指定の位置に石を置いた場合に角を取れるかどうかをチェックする補助関数
 const canTakeWithMove = (board, index, player) => {
-  // 8方向の全てについてリバーシが可能か確認
   const directions = [-1, 1, -8, 8, -9, 9, -7, 7];
   for (let direction of directions) {
     let currentIdx = index + direction;
     let hasOpponentStone = false;
-
-    // 指定した方向に沿ってリバーシが可能かどうか
     while (currentIdx >= 0 && currentIdx < 64) {
       if (board[currentIdx] === 3 - player) {
-        hasOpponentStone = true; // 相手の石が存在する
+        hasOpponentStone = true;
       } else if (board[currentIdx] === player) {
-        if (hasOpponentStone) {
-          return true; // 挟める場合
-        } else {
-          break; // 相手の石がない場合は挟めない
-        }
+        if (hasOpponentStone) return true;
+        else break;
       } else {
-        break; // 空マスの場合
+        break;
       }
-
       currentIdx += direction;
     }
   }
@@ -308,7 +315,7 @@ const canTakeWithMove = (board, index, player) => {
 };
 
 const getBlockingMoves = (board, line, player) => {
-  let blockingMoves = [];
+  const blockingMoves = [];
   for (let i = 0; i < line.length; i++) {
     if (board[line[i]] === 0) {
       const newBoard = makeMove([...board], player, Math.floor(line[i] / 8), line[i] % 8);
@@ -317,15 +324,18 @@ const getBlockingMoves = (board, line, player) => {
       }
     }
   }
-  if(blockingMoves.length > 0){
-    console.log("Blocking moves identified:", blockingMoves); // デバッグ用出力
+  if (blockingMoves.length > 0) {
+    console.log("Blocking moves identified:", blockingMoves);
   }
   return blockingMoves;
 };
 
+// ------------------------------------------------------------
+// 盤面操作
+// ------------------------------------------------------------
 const makeMove = (board, player, row, col) => {
   const index = row * 8 + col;
-  const reversibleStones = getReversibleStones(index, player);
+  const reversibleStones = getReversibleStones(board, index, player);
   board[index] = player;
   reversibleStones.forEach((stoneIndex) => {
     board[stoneIndex] = player;
@@ -333,8 +343,27 @@ const makeMove = (board, player, row, col) => {
   return board;
 };
 
-const getReversibleStones = (idx, player = currentColor) => {
-  //クリックしたマスから見て、各方向にマスがいくつあるかをあらかじめ計算する
+// ★重要：board依存の実装に修正（後方互換も確保）
+/**
+ * getReversibleStones(boardOrIndex, idxOrPlayer, playerOpt)
+ * - 通常は (board, idx, player) で使用
+ * - 旧UI互換： (idx) / (idx, player) もOK（内部で stoneStateList を使う）
+ */
+const getReversibleStones = (boardOrIdx, idxOrPlayer, playerOpt) => {
+  let board, idx, player;
+
+  if (Array.isArray(boardOrIdx)) {
+    board = boardOrIdx;
+    idx = idxOrPlayer;
+    player = playerOpt ?? currentColor;
+  } else {
+    // 後方互換：UIからの呼び出し（board省略）時はグローバル盤面を参照
+    board = stoneStateList;
+    idx = boardOrIdx;
+    player = idxOrPlayer ?? currentColor;
+  }
+
+  // クリックしたマスから見て、各方向にマスがいくつあるかをあらかじめ計算する
   const squareNums = [
     7 - (idx % 8),
     Math.min(7 - (idx % 8), (56 + (idx % 8) - idx) / 8),
@@ -345,31 +374,23 @@ const getReversibleStones = (idx, player = currentColor) => {
     (idx - (idx % 8)) / 8,
     Math.min(7 - (idx % 8), (idx - (idx % 8)) / 8),
   ];
-  //for文ループの規則を定めるためのパラメータ定義
   const parameters = [1, 9, 8, 7, -1, -9, -8, -7];
 
-  //ひっくり返せることが確定した石の情報を入れる配列
   let results = [];
 
-  //8方向への走査のためのfor文
   for (let i = 0; i < 8; i++) {
-    //ひっくり返せる可能性のある石の情報を入れる配列
     const box = [];
-    //現在調べている方向にいくつマスがあるか
     const squareNum = squareNums[i];
     const param = parameters[i];
     let currentIdx = idx + param;
 
-    //隣に石があるか 及び 隣の石が相手の色か -> どちらでもない場合は次のループへ
-    if (currentIdx < 0 || currentIdx >= 64 || stoneStateList[currentIdx] === 0 || stoneStateList[currentIdx] === player) continue;
-    //隣の石の番号を仮ボックスに格納
+    if (currentIdx < 0 || currentIdx >= 64 || board[currentIdx] === 0 || board[currentIdx] === player) continue;
     box.push(currentIdx);
 
-    //さらに隣に石があるかを調査
     for (let j = 0; j < squareNum - 1; j++) {
       currentIdx += param;
       if (currentIdx < 0 || currentIdx >= 64) break;
-      const targetColor = stoneStateList[currentIdx];
+      const targetColor = board[currentIdx];
       if (targetColor === 0) break;
       if (targetColor === player) {
         results = results.concat(box);
@@ -382,6 +403,9 @@ const getReversibleStones = (idx, player = currentColor) => {
   return results;
 };
 
+// ------------------------------------------------------------
+// AI手番
+// ------------------------------------------------------------
 const aiMove = () => {
   setTimeout(() => {
     const legalMoves = getLegalMoves(stoneStateList, currentColor);
@@ -391,7 +415,7 @@ const aiMove = () => {
       const bestMove = findBestMove(stoneStateList, currentColor);
       if (bestMove) {
         console.log("AI moves to:", bestMove);
-        makeMoveAndUpdateDisplay(bestMove.row * 8 + bestMove.col);  // AIの手を置く
+        makeMoveAndUpdateDisplay(bestMove.row * 8 + bestMove.col);
       } else {
         console.log("No valid move found by findBestMove");
       }
@@ -401,7 +425,6 @@ const aiMove = () => {
         declareWinner();
         isPlayerTurn = true;
       } else {
-        // AIがパスする場合
         alert("AIはパスします");
         changeTurn();
       }
@@ -409,7 +432,9 @@ const aiMove = () => {
   }, 500);
 };
 
-// 駒を配置し表示を更新する関数
+// ------------------------------------------------------------
+// 表示更新
+// ------------------------------------------------------------
 const makeMoveAndUpdateDisplay = (index) => {
   const reversibleStones = getReversibleStones(index);
   console.log("makeMoveAndUpdateDisplay: reversibleStones", reversibleStones);
@@ -426,7 +451,7 @@ const makeMoveAndUpdateDisplay = (index) => {
   if (stoneStateList.every((state) => state !== 0)) {
     declareWinner();
   } else {
-    changeTurn(); // 次のターンに移る
+    changeTurn();
   }
 };
 
@@ -477,6 +502,10 @@ const initializeBoard = () => {
       stoneStateList.push(0);
     }
   }
+  currentColor = 1;
+  currentTurnText.textContent = "黒";
+  updateTurnColor("黒");
+  isPlayerTurn = true;
 };
 
 const resetBoard = () => {
@@ -526,3 +555,4 @@ window.onload = () => {
   });
   surrenderButton.addEventListener("click", surrender);
 };
+

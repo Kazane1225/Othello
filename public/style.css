@@ -1,24 +1,70 @@
+/* =========================================================
+   Base styles
+   ========================================================= */
 body {
-  font-family: sans-serif;
-  margin: auto;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  margin: 0;
+  padding: 0;
   max-width: 1280px;
+  margin-left: auto;
+  margin-right: auto;
+  background-color: #f5f5f5;
+  color: #222;
+  line-height: 1.6;
 }
 
+/* =========================================================
+   Navbar
+   ========================================================= */
 .navbar {
   background-color: #313236;
-  border-radius: 2px;
+  border-radius: 4px;
   max-width: 800px;
+  margin: 20px auto; /* 上下に余白を追加して中央寄せ */
+  padding: 0 8px;
+  display: flex;
+  justify-content: center; /* 中央寄せ */
+  align-items: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
 }
 
+/* リンク要素 */
 .navbar a {
-  color: #aaa;
+  color: #bbb;
   display: inline-block;
   font-size: 15px;
-  padding: 10px;
+  padding: 12px 16px;
   text-decoration: none;
+  transition: color 0.25s ease, background-color 0.25s ease;
+  border-radius: 3px;
 }
 
+/* ホバー時の配色改善（アクセシビリティ考慮） */
 .navbar a:hover {
-  color: #ffffff;
+  color: #fff;
+  background-color: rgba(255, 255, 255, 0.08);
 }
 
+/* 現在ページなどを強調するクラス（任意で利用） */
+.navbar a.active {
+  color: #fff;
+  background-color: #505158;
+  font-weight: bold;
+}
+
+/* =========================================================
+   Responsive (スマホ対応)
+   ========================================================= */
+@media (max-width: 600px) {
+  .navbar {
+    flex-direction: column;
+    padding: 8px 0;
+  }
+
+  .navbar a {
+    display: block;
+    width: 100%;
+    text-align: center;
+    padding: 10px;
+  }
+}
